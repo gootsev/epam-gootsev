@@ -1,0 +1,10 @@
+[Unit]
+Description=Daemon for detecting of running script
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/check_script
+
+
+[Install]
+WantedBy=multi-user.target

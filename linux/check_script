@@ -1,0 +1,14 @@
+#!/bin/bash
+LOG=/var/log/supertool.log
+
+
+mkfifo /tmp/checkpipe
+chmod 666 /tmp/checkpipe
+systemd-notify --ready --status="Waiting for data"
+
+while : ; do
+	read a < /tmp/checkpipe
+	systemd-notify --status="$a"
+	echo "$a" >> $LOG
+	systemd-notify --status=" Waiting for data"
+done

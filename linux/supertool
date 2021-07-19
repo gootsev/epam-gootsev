@@ -1,0 +1,125 @@
+#!/bin/bash
+MYDIR=$(pwd)
+TIMESTAMP=$(date "+%d-%m-%Y %T")
+LOG=/var/log/supertool.log
+
+echo "$TIMESTAMP Script started" > /tmp/checkpipe
+trap handler SIGINT
+
+handler() {
+	echo -e "\nAttention: \"Ctrl + C\" command is trapped!\nBe patiend and wait a little\n"
+	sleep 5
+}
+
+basicFunction() {
+	envFunction
+	discFunction
+	netFunction	
+}
+
+envFunction() {
+	echo -e "Here is some basic sets of your environment: \n"
+	echo -e "$(uptime)\n"
+	echo -e "Current environment:\n"
+	printenv | grep -e USER -e LOGNAME -e SHELL -e ^PATH
+	echo -e "\nNOTE:\tFull file with your current environment has been saved to $LOG"
+	echo -e "$TIMESTAMP\nYour current environment\n" >> $LOG
+	printenv >> $LOG
+}
+
+
+
+statFunction() {
+	echo -e "Here is some information about your current directory \n"
+	echo $MYDIR
+	stat $MYDIR | grep -e Access -e Modify -e Change
+	echo -e "\nNumber of files: $(find . -type f | wc -l)"
+	echo "Number of directories: $(find . -type d | wc -l)"
+	echo -e "Total size including hiden files: $(ls -lhFa | grep total) \n"
+	echo "Your top 3 lagrest files:"
+	ls -lahS | grep ^- | head -3
+	echo -e "\nLast 3 modified files"
+	ls -lat | grep ^-| head -3
+	echo
+}
+
+procFunction() {
+	#check the info about memory with different ways
+
+	echo -e "\nHere is the information about your memory and swap:\n"
+	free -mh | head -2
+	echo
+	cat /proc/meminfo | grep Swap*
+
+	#sleep with niceness and trap
+	echo -e "\nThe process \"sleep 10\" with niceness -19 is running now. Try to use \"Ctrl + C\" to stop this"
+	nice -19 sleep 7
+
+	#sleep process
+	sleep 101 &
+	PID=$(pgrep -f "sleep 101")
+	echo -e "\n$TIMESTAMP\nThe environment of process $PID:\n" >> $LOG
+	echo -e "$(cat /proc/$PID/environ)\n" >> $LOG
+	echo -e "\nProcess \"sleep 101\" has been created in bg-mode with PID:$PID.\nThe environment of this process has been saved in file $LOG\n"
+	echo -e "Let's check it by looking at jobs\n$(jobs | grep "sleep 101")\n"
+	echo -e "\nAnd verify the PID of this process\n$(ps -aux | grep -e "sleep 101" -e "COMMAND"| grep -v "grep")\n"
+	echo -e "Now we are sending SIGTERM to all processes with name \"sleep 101\" and veryfy that there are no processes with that name\n"
+	kill $(pgrep -f "sleep 101")
+	echo "Number of processes: $(pgrep -i "sleep 101" | wc -l)"
+
+	#nohup call
+	echo -e "\nNow let's run \"ls\" command in nohup mode"
+	nohup echo "$TIMESTAMP The number of files in current catalog is $(ls -l | wc -l)"
+	echo -e "\nAnd check file \"nohup.out\""
+	cat nohup.out
+	rm nohup.out
+}
+
+discFunction () {
+	echo -e "\n\nHere is the main information about your disks:\n"
+	echo -e "$(lsblk)\n"
+	echo -e "$(df -h | grep -e "Filesystem" -e "sda*" -e "nvme*" | awk '{print $1"\t"$2"\t"$5}')\n"
+	echo -e "$(df -i | grep -e "Filesystem" -e "sda*" -e "nvme*" | awk '{print $1"\t"$2"\t"$5}')\n"
+}
+
+netFunction() {
+	echo -e "Network interfaces:\n$(ip addr | grep "inet ")"
+	echo -e "\nYour external ip:\n$(curl -s ifconfig.co)"
+	echo -e "\nLet's ping \"www.google.com\" and check the availability of this web page :\n"
+	echo -e "Statistics:\t$(ping -c 3 www.google.com  | grep packets)"
+	echo -e "Status:\t\t$(curl -Is www.google.com | grep HTTP)"
+}
+
+helpFunction() {
+	echo -e "This script helps to get some information about your system\n
+	To use it run this script with these parameters:\n
+	-b or --basic\t Show you some information about environment, discs and network
+	-s or --stat\t Show the information about your directory
+	-p or --proc\t Show you some examples with processes
+	-h or --help\t Show help
+	"
+}
+
+
+if [ $# -lt 1 ]
+then
+	echo "No options found! Please enter -b (--basic), - s (--stat), -p (--proc), -h (--help) options"
+	exit 1
+fi
+
+
+for arg in "$@"
+do
+  shift
+  case "$arg" in
+    "basic" | "--basic" | "-b") basicFunction ;;
+    "stat" | "--stat" | "-s")  statFunction ;;
+    "proc" | "--proc" | "-p")  procFunction ;;
+    "help" | "--help" | "-h")  helpFunction ;;
+    *) echo "No reasonable options found! Try one more time or use help (-p)";;
+  esac
+done
+
+
+
+echo "$TIMESTAMP Script finished" > /tmp/checkpipe
