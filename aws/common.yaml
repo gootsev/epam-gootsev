@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:  This template deploys a VPC, with public subnets spread
+  across three Availability Zones. It deploys an internet gateway, with a default
+  route on the public subnets.
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.11.0/24
+
+  PublicSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the third Availability Zone
+    Type: String
+    Default: 10.192.12.0/24
+
+  MountPoint:
+    Description: The Linux mount point for the EFS volume
+    Type: String
+    MinLength: '1'
+    Default: myEFSvolume
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet3CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ3)
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  SshSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupName: "allow-ssh-sg"
+      GroupDescription: "Security group with ssh inbound rule"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  MyEC2Instance1: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      InstanceType: "t2.micro"
+      ImageId: "ami-058b1b7fe545997ae"
+      KeyName: "Ireland"
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !GetAtt SshSecurityGroup.GroupId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --configsets MountConfig --region ${AWS::Region}
+          crontab /home/ec2-user/crontab
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+
+  MyEC2Instance2: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      InstanceType: "t2.micro"
+      ImageId: "ami-058b1b7fe545997ae"
+      KeyName: "Ireland"
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !GetAtt SshSecurityGroup.GroupId
+      BlockDeviceMappings: 
+      - DeviceName: "/dev/sda1"
+        Ebs: 
+          DeleteOnTermination: "true"
+          VolumeSize: "1"
+        NoDevice: {}
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          mkdir /${MountPoint}
+          mount -t nfs4 -o nfsvers=4.1 ${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint}
+          chown ec2-user:ec2-user /${MountPoint}"
+
+  MountTargetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: "vpc-099da2bef15af267f"
+      GroupDescription: Security group for mount target
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '2049'
+        ToPort: '2049'
+        CidrIp: 0.0.0.0/0
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      AvailabilityZoneName: !Select [ 0, !GetAZs '' ]
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+      - Key: Name
+        Value: "EFS"
+  MountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SubnetId: "subnet-07d96b644c7abc947"
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: gootsev-test-bucket1
+      Tags:
+        - Key: Name
+          Value: gootsev-test-bucket1
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Deny
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /deny-for-download*
+            Principal:
+              "AWS": "arn:aws:iam::034768220803:user/Alex"
+
+
+
+Outputs:
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+
+  PublicSubnets:
+    Description: A list of the public subnets
+    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2, !Ref PublicSubnet3 ]]
+
+  PublicSubnet1:
+    Description: A reference to the public subnet in the 1st Availability Zone
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet2
+
+  PublicSubnet3:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet3
+
+  SshSecurityGroup:
+    Description: Security group with no allow-ssh rule
+    Value: !Ref SshSecurityGroup

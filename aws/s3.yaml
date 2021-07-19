@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:  This template for S3 bucket
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: gootsev-bucket
+      Tags:
+        - Key: Name
+          Value: gootsev-bucket
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Deny
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /deny-for-download*
+            Principal:
+              "AWS": "arn:aws:iam::034768220803:user/Alex"
