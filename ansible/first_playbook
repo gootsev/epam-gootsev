@@ -1,0 +1,67 @@
+---
+- name: First play
+  hosts: aws_first_server
+  become: yes
+  remote_user: ubuntu
+  become_user: root
+
+  tasks:
+    - name: Install dependencies for awscli
+      apt:
+        name: "python3-pip"
+        state: latest
+        update_cache: yes
+
+    - name: Install awscli with pip3
+      pip:
+        name: "awscli"
+        executable: pip3
+
+    - name: Create file awscli_installed
+      file:
+        path: /home/ubuntu/awscli_installed
+        state: touch
+        mode: '0755'
+
+    - name: Copy awscli_installed to s3-bucket
+      shell: "aws s3 cp awscli_installed s3://gootsev-bucket/"
+
+- name: Second play
+  hosts: aws_second_server
+  become: yes
+  remote_user: ubuntu
+  become_user: root
+
+  tasks:
+    - name: Copy script from master node to managed node
+      copy:
+        src: ~/ansible/script.sh
+        dest: /home/ubuntu/
+        mode: '0777'
+
+- name: Third play
+  hosts: aws_common_group
+  become: yes
+  remote_user: ubuntu
+  become_user: root
+
+  tasks:
+    - name: copy Cloudwatch package
+      shell: "wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"
+
+    - name: install amazoncloudwatch-agent
+      shell: "dpkg -i -E ./amazon-cloudwatch-agent.deb"
+      notify:
+        - "enable service on boot"
+        - "restart amazon-cloudwatch-agent"
+
+  handlers:
+    - name: enable service on boot
+      service:
+        name: "amazon-cloudwatch-agent"
+        enabled: "yes"
+
+    - name: restart amazon-cloudwatch-agent
+      service:
+        name: "amazon-cloudwatch-agent"
+        state: "restarted"

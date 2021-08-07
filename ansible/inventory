@@ -1,0 +1,13 @@
+all:
+  hosts:
+  children:
+    aws_first_server:
+      hosts:
+        18.202.222.247:
+    aws_second_server:
+      hosts:
+        34.253.85.230:
+    aws_common_group:
+      children:
+        aws_first_server:
+        aws_second_server:
