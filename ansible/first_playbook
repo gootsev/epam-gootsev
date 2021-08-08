@@ -47,7 +47,9 @@
 
   tasks:
     - name: copy Cloudwatch package
-      shell: "wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"
+      get_url:
+        url: https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+        dest: /home/ubuntu/
 
     - name: install amazoncloudwatch-agent
       shell: "dpkg -i -E ./amazon-cloudwatch-agent.deb"
