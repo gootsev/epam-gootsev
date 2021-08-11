@@ -1,0 +1,5 @@
+---
+- name: Set template file
+  template:
+   src: 'my_template'
+   dest: '/home/ubuntu/test_template.sh'

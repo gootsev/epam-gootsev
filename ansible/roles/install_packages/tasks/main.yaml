@@ -1,0 +1,21 @@
+---
+- name: Install dependencies for awscli
+  apt:
+    name: "python3-pip"
+    state: latest
+    update_cache: yes
+
+- name: Install awscli with pip3
+  pip:
+    name: "awscli"
+    executable: pip3
+
+- name: Install boto
+  pip:
+    name: "boto3"
+    executable: pip3
+
+- name: Install botocore
+  pip:
+    name: "botocore"
+    executable: pip3

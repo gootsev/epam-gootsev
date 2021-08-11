@@ -3,10 +3,12 @@ all:
   children:
     aws_first_server:
       hosts:
-        18.202.222.247:
+        first_server:
+          ansible_host: 46.137.63.26
     aws_second_server:
       hosts:
-        34.253.85.230:
+        second_server:
+          ansible_host: 54.72.216.136
     aws_common_group:
       children:
         aws_first_server:

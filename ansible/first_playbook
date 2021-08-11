@@ -5,17 +5,16 @@
   remote_user: ubuntu
   become_user: root
 
-  tasks:
-    - name: Install dependencies for awscli
+  pre_tasks:
+
+    - name: Upgrade all packages to the latest version
       apt:
-        name: "python3-pip"
+        name: "*"
+        force_apt_get: yes
         state: latest
         update_cache: yes
 
-    - name: Install awscli with pip3
-      pip:
-        name: "awscli"
-        executable: pip3
+  tasks:
 
     - name: Create file awscli_installed
       file:
@@ -24,13 +23,30 @@
         mode: '0755'
 
     - name: Copy awscli_installed to s3-bucket
-      shell: "aws s3 cp awscli_installed s3://gootsev-bucket/"
+      aws_s3:
+        bucket: "{{ bucket_name }}"
+        object: /awscli_installed.txt
+        src: ./awscli_installed
+        mode: put
+
+
+  roles:
+    - role: install_packages
 
 - name: Second play
   hosts: aws_second_server
   become: yes
   remote_user: ubuntu
   become_user: root
+
+  pre_tasks:
+
+    - name: Upgrade all packages to the latest version
+      apt:
+        name: "*"
+        force_apt_get: yes
+        state: latest
+        update_cache: yes
 
   tasks:
     - name: Copy script from master node to managed node
@@ -39,6 +55,10 @@
         dest: /home/ubuntu/
         mode: '0777'
 
+  roles:
+    - name: Copy another script using role
+      role: script_role
+
 - name: Third play
   hosts: aws_common_group
   become: yes
@@ -46,24 +66,14 @@
   become_user: root
 
   tasks:
-    - name: copy Cloudwatch package
-      get_url:
-        url: https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-        dest: /home/ubuntu/
 
-    - name: install amazoncloudwatch-agent
-      shell: "dpkg -i -E ./amazon-cloudwatch-agent.deb"
-      notify:
-        - "enable service on boot"
-        - "restart amazon-cloudwatch-agent"
+    - import_role:
+        name: install_packages
+        tasks_from: cloudwatch.yaml
 
-  handlers:
-    - name: enable service on boot
-      service:
-        name: "amazon-cloudwatch-agent"
-        enabled: "yes"
-
-    - name: restart amazon-cloudwatch-agent
-      service:
-        name: "amazon-cloudwatch-agent"
-        state: "restarted"
+  post_tasks:
+    - name: Touch file with name depended on servers
+      file:
+        path: "/home/ubuntu/{{ file_name }}"
+        state: touch
+        mode: 0755

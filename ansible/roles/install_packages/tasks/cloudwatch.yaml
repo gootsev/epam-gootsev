@@ -1,0 +1,12 @@
+---
+- name: copy Cloudwatch package
+  get_url:
+    url: https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+    dest: /home/ubuntu/
+
+- name: install amazoncloudwatch-agent
+  apt:
+    deb: ./amazon-cloudwatch-agent.deb
+  notify:
+    - "enable service on boot"
+    - "restart amazon-cloudwatch-agent"
