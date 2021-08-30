@@ -9,10 +9,5 @@ Enter command:
 
 ##Note
 
-There are some basic parameters that are used by default if no user data has been entered:
-
-- NAME = "Max Payne"
-- CITY = "Moscow"
-- API_KEY = "My personal api key"
-
-Please, use your own API_KEY
+Doker-compose added.
+Please, use your own API_KEY and another environment parameters. You can change them if file .env
