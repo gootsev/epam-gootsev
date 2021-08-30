@@ -1,10 +1,6 @@
-FROM python:3.7-alpine
+FROM python:3.7
 
 LABEL mantainer="gootsev@gmail.com"
-
-ENV API_KEY="none"
-ENV NAME="none"
-ENV CITY="none"
 
 WORKDIR /app/
 COPY ./requirements.txt /app/requirements.txt
